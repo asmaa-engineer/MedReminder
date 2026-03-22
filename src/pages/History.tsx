@@ -6,6 +6,7 @@ import GlassCard from '@/components/GlassCard';
 import { Calendar as CalendarIcon, Download, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 
 const History = () => {
   const [date, setDate] = React.useState<Date | undefined>(new Date());

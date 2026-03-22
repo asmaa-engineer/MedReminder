@@ -7,6 +7,7 @@ import GlassCard from '@/components/GlassCard';
 import { ChevronLeft, Edit2, Trash2, Clock, Calendar, Pill, AlertCircle, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 const MedicationDetail = () => {
   const navigate = useNavigate();

@@ -8,6 +8,7 @@ import { ChevronLeft, AlertCircle, ShoppingCart, ExternalLink, RefreshCw } from 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 
 const Refills = () => {
   const navigate = useNavigate();

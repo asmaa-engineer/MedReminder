@@ -6,6 +6,7 @@ import Navigation from '@/components/Navigation';
 import GlassCard from '@/components/GlassCard';
 import { Bell, Pill, AlertCircle, Sparkles, ChevronLeft, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 const Notifications = () => {
   const navigate = useNavigate();
