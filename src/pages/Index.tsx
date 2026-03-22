@@ -42,7 +42,7 @@ const Index = () => {
           <Button 
             variant="ghost" 
             size="icon" 
-            className="relative bg-white/50 dark:bg-gray-800/50 backdrop-blur-md rounded-2xl shadow-sm h-12 w-12"
+            className="relative bg-white/50 dark:bg-gray-800/50 backdrop-blur-md rounded-2xl shadow-sm h-12 w-12 min-h-[48px] min-w-[48px]"
             onClick={() => navigate('/notifications')}
           >
             <Bell size={24} className="text-gray-600 dark:text-gray-400" />
@@ -52,7 +52,7 @@ const Index = () => {
 
         {/* Adherence Progress */}
         <GlassCard 
-          className="mb-8 bg-blue-600 text-white border-none cursor-pointer active:scale-[0.98] transition-transform"
+          className="mb-8 bg-blue-600 text-white border-none cursor-pointer active:scale-[0.98] transition-transform min-h-[120px]"
           onClick={() => navigate('/insights')}
         >
           <div className="flex justify-between items-center mb-4">
@@ -117,7 +117,7 @@ const Index = () => {
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Today's Schedule</h2>
             <Button 
               variant="ghost" 
-              className="text-blue-600 dark:text-blue-400 font-bold hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl h-12"
+              className="text-blue-600 dark:text-blue-400 font-bold hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl h-12 min-h-[48px]"
               onClick={() => navigate('/medications')}
             >
               View All
@@ -144,13 +144,13 @@ const Index = () => {
                   </div>
                 </div>
                 {med.status === 'taken' ? (
-                  <div className="bg-green-50 dark:bg-green-900/30 p-2 rounded-full">
+                  <div className="bg-green-50 dark:bg-green-900/30 p-2 rounded-full min-h-[48px] min-w-[48px] flex items-center justify-center">
                     <CheckCircle2 className="text-green-500 dark:text-green-400" size={24} />
                   </div>
                 ) : (
                   <Button 
                     size="sm" 
-                    className="rounded-xl bg-blue-600 hover:bg-blue-700 px-6 font-bold shadow-md shadow-blue-100 dark:shadow-none h-12"
+                    className="rounded-xl bg-blue-600 hover:bg-blue-700 px-6 font-bold shadow-md shadow-blue-100 dark:shadow-none h-12 min-h-[48px]"
                     onClick={(e) => {
                       e.stopPropagation();
                       logDose(med.id);
@@ -167,7 +167,7 @@ const Index = () => {
         {/* FAB */}
         <Button 
           onClick={() => navigate('/camera')}
-          className="fixed bottom-24 right-6 w-16 h-16 rounded-[24px] shadow-2xl bg-blue-600 hover:bg-blue-700 flex items-center justify-center p-0 border-4 border-white dark:border-gray-900 z-50"
+          className="fixed bottom-24 right-6 w-16 h-16 rounded-[24px] shadow-2xl bg-blue-600 hover:bg-blue-700 flex items-center justify-center p-0 border-4 border-white dark:border-gray-900 z-50 min-h-[64px] min-w-[64px]"
         >
           <Plus size={32} className="text-white" />
         </Button>
