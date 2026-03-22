@@ -1,2 +1,0 @@
-# Welcome to your medimind
-AI-Powered Medication Reminder App - React + Supabase + PWA
