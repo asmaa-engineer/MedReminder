@@ -4,15 +4,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import Navigation from '@/components/Navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Send, Mic, Sparkles, User, Bot, Check, Plus } from 'lucide-react';
+import { Send, Mic, Sparkles, User, Bot, Plus, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getRemainingMeds, logDose } from '@/lib/medicationService';
+import { getRemainingMeds, logDose, getTodayMeds } from '@/lib/medicationService';
+import { getGeminiResponse } from '@/lib/gemini';
 
 const Chat = () => {
   const [messages, setMessages] = useState([
     { id: 1, role: 'ai', text: "Hello! I'm your MediMind AI assistant. How can I help you with your medications today?" }
   ]);
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [isSelectingMed, setIsSelectingMed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -29,45 +31,44 @@ const Chat = () => {
     }
   }, [messages]);
 
-  const handleSend = (textOverride?: string) => {
+  const handleSend = async (textOverride?: string) => {
     const text = textOverride || input;
-    if (!text.trim()) return;
+    if (!text.trim() || isLoading) return;
     
     const userMsg = { id: Date.now(), role: 'user', text };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
+    setIsLoading(true);
 
-    // Logic for "Yes" or "Log my dose"
-    if (text.toLowerCase().includes('yes') || text.toLowerCase().includes('log')) {
-      setTimeout(() => {
-        const remaining = getRemainingMeds();
-        if (remaining.length === 0) {
-          setMessages(prev => [...prev, { 
-            id: Date.now() + 1, 
-            role: 'ai', 
-            text: "You've already taken all your scheduled doses for today! Great job." 
-          }]);
-        } else {
-          setIsSelectingMed(true);
-          setMessages(prev => [...prev, { 
-            id: Date.now() + 1, 
-            role: 'ai', 
-            text: "Which medication would you like to log?" 
-          }]);
-        }
-      }, 600);
-      return;
+    // Special logic for logging doses
+    if (text.toLowerCase().includes('log') || text.toLowerCase().includes('took')) {
+      const remaining = getRemainingMeds();
+      if (remaining.length > 0) {
+        setIsSelectingMed(true);
+        setMessages(prev => [...prev, { 
+          id: Date.now() + 1, 
+          role: 'ai', 
+          text: "Which medication would you like to log?" 
+        }]);
+        setIsLoading(false);
+        return;
+      }
     }
 
-    // Default AI response
-    setTimeout(() => {
-      const aiMsg = { 
-        id: Date.now() + 1, 
-        role: 'ai', 
-        text: "I've processed your request. Based on your schedule, you have doses remaining today. Would you like me to log one now?" 
-      };
-      setMessages(prev => [...prev, aiMsg]);
-    }, 1000);
+    // Get AI response from Gemini
+    const context = {
+      todayMeds: getTodayMeds(),
+      userName: "Alex"
+    };
+    
+    const aiResponse = await getGeminiResponse(text, context);
+    
+    setMessages(prev => [...prev, { 
+      id: Date.now() + 1, 
+      role: 'ai', 
+      text: aiResponse 
+    }]);
+    setIsLoading(false);
   };
 
   const handleLogMed = async (medId: number, medName: string) => {
@@ -77,7 +78,7 @@ const Chat = () => {
     setMessages(prev => [...prev, {
       id: Date.now(),
       role: 'ai',
-      text: `✅ Logged ${medName} at ${result?.takenAt}. Would you like to log another one?`
+      text: `✅ Logged ${medName} at ${result?.takenAt}. Is there anything else you need help with?`
     }]);
   };
 
@@ -117,6 +118,17 @@ const Chat = () => {
           </div>
         ))}
 
+        {isLoading && (
+          <div className="flex gap-3 max-w-[85%]">
+            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+              <Bot size={18} />
+            </div>
+            <div className="p-4 rounded-2xl bg-white dark:bg-gray-800 shadow-sm rounded-tl-none">
+              <Loader2 className="animate-spin text-blue-600" size={18} />
+            </div>
+          </div>
+        )}
+
         {isSelectingMed && (
           <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2">
             {getRemainingMeds().map(med => (
@@ -142,7 +154,7 @@ const Chat = () => {
       </div>
 
       <div className="fixed bottom-24 left-0 right-0 px-6 space-y-4">
-        {!isSelectingMed && (
+        {!isSelectingMed && !isLoading && (
           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
             {suggestions.map((s) => (
               <button 
@@ -175,9 +187,10 @@ const Chat = () => {
           </div>
           <Button 
             onClick={() => handleSend()}
+            disabled={isLoading}
             className="h-14 w-14 rounded-2xl bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-200 dark:shadow-none"
           >
-            <Send size={20} />
+            {isLoading ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
           </Button>
         </div>
       </div>

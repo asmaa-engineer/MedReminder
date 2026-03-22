@@ -19,6 +19,7 @@ import MedicationDetail from "./pages/MedicationDetail";
 import MissedDoses from "./pages/MissedDoses";
 import Remaining from "./pages/Remaining";
 import Settings from "./pages/Settings";
+import AddMedication from "./pages/AddMedication";
 import ChatFAB from "./components/ChatFAB";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/medications" element={<Medications />} />
           <Route path="/medications/:id" element={<MedicationDetail />} />
+          <Route path="/medications/new" element={<AddMedication />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/history" element={<History />} />
           <Route path="/profile" element={<Profile />} />
