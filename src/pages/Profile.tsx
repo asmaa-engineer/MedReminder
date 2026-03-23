@@ -5,13 +5,25 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Navigation from '@/components/Navigation';
 import GlassCard from '@/components/GlassCard';
-import { User, Settings as SettingsIcon, LogOut, ChevronRight, Camera, Phone, Shield } from 'lucide-react';
+import { User, Settings as SettingsIcon, LogOut, ChevronRight, Camera, Phone, BellRing } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { notifyDoseReminder, requestNotificationPermission } from '@/lib/notificationService';
+import { showSuccess } from '@/utils/toast';
 
 const Profile = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
+
+  const handleTestNotification = async () => {
+    const granted = await requestNotificationPermission();
+    if (granted) {
+      notifyDoseReminder("Test Medication", "Now");
+      showSuccess("Test notification sent!");
+    } else {
+      showSuccess("Notification permission denied.");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-background pb-32">
@@ -32,9 +44,25 @@ const Profile = () => {
 
         <div className="space-y-6">
           <section>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 ml-2">System Test</h3>
+            <GlassCard className="p-0 bg-white dark:bg-gray-900 border-none shadow-sm overflow-hidden">
+              <button 
+                onClick={handleTestNotification}
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors min-h-[48px]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="bg-purple-50 dark:bg-purple-900/30 p-2 rounded-xl text-purple-600"><BellRing size={20} /></div>
+                  <span className="font-medium">Test Push Notification</span>
+                </div>
+                <ChevronRight size={18} className="text-gray-300" />
+              </button>
+            </GlassCard>
+          </section>
+
+          <section>
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 ml-2">{t('profile')}</h3>
             <GlassCard className="p-0 bg-white dark:bg-gray-900 border-none shadow-sm overflow-hidden">
-              <button className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              <button className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors min-h-[48px]">
                 <div className="flex items-center gap-3">
                   <div className="bg-blue-50 dark:bg-blue-900/30 p-2 rounded-xl text-blue-600"><User size={20} /></div>
                   <span className="font-medium">Personal Info</span>
@@ -42,7 +70,7 @@ const Profile = () => {
                 <ChevronRight size={18} className="text-gray-300" />
               </button>
               <div className="h-px bg-gray-50 dark:bg-gray-800 mx-4" />
-              <button className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              <button className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors min-h-[48px]">
                 <div className="flex items-center gap-3">
                   <div className="bg-red-50 dark:bg-red-900/30 p-2 rounded-xl text-red-600"><Phone size={20} /></div>
                   <span className="font-medium">Emergency Contact</span>
@@ -57,7 +85,7 @@ const Profile = () => {
             <GlassCard className="p-0 bg-white dark:bg-gray-900 border-none shadow-sm overflow-hidden">
               <button 
                 onClick={() => navigate('/settings')}
-                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors min-h-[48px]"
               >
                 <div className="flex items-center gap-3">
                   <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded-xl text-gray-600"><SettingsIcon size={20} /></div>
@@ -68,7 +96,7 @@ const Profile = () => {
             </GlassCard>
           </section>
 
-          <Button variant="ghost" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-2xl h-14 font-bold">
+          <Button variant="ghost" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-2xl h-14 font-bold min-h-[48px]">
             <LogOut size={20} className="mr-2" />
             {t('logout')}
           </Button>

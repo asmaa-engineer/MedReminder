@@ -20,9 +20,10 @@ export default defineConfig(() => ({
         short_name: 'MediMind',
         description: 'AI-Powered Medication Assistant',
         theme_color: '#4A90E2',
-        start_url: '/',
-        display: 'standalone',
         background_color: '#ffffff',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
         icons: [
           {
             src: 'placeholder.svg',
@@ -52,7 +53,21 @@ export default defineConfig(() => ({
               cacheName: 'google-fonts-cache',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
+                maxAgeSeconds: 60 * 60 * 24 * 365
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/oycdsiipsryeqhihrzgf\.supabase\.co\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'supabase-api-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24
               },
               cacheableResponse: {
                 statuses: [0, 200]
