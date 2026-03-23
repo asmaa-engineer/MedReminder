@@ -1,28 +1,41 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Navigation from '@/components/Navigation';
 import GlassCard from '@/components/GlassCard';
-import { User, Settings as SettingsIcon, LogOut, ChevronRight, Camera, Phone, BellRing, ShieldCheck } from 'lucide-react';
+import { User, Settings as SettingsIcon, LogOut, ChevronRight, Camera, Phone, BellRing, ShieldCheck, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { notifyDoseReminder, requestNotificationPermission } from '@/lib/notificationService';
 import { showSuccess, showError } from '@/utils/toast';
 import { supabase } from "@/integrations/supabase/client";
+import { uploadAvatar } from '@/lib/storageService';
 
 const Profile = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const [user, setUser] = React.useState<any>(null);
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    const getUser = async () => {
+    const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
+      
+      if (user) {
+        const { data: profileData } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        setProfile(profileData);
+      }
     };
-    getUser();
+    fetchData();
   }, []);
 
   const handleLogout = async () => {
@@ -32,6 +45,46 @@ const Profile = () => {
     } else {
       showSuccess("Logged out successfully");
       navigate('/login');
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      showError("File size must be less than 2MB");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const publicUrl = await uploadAvatar(user.id, file);
+      setProfile({ ...profile, avatar_url: publicUrl });
+      showSuccess("Profile picture updated!");
+    } catch (error: any) {
+      showError(error.message || "Failed to upload image");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!user) return;
+    setIsUploading(true);
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ avatar_url: null })
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      setProfile({ ...profile, avatar_url: null });
+      showSuccess("Profile picture removed");
+    } catch (error: any) {
+      showError(error.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -45,23 +98,58 @@ const Profile = () => {
     }
   };
 
+  const initials = profile?.full_name 
+    ? profile.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()
+    : user?.email?.substring(0, 2).toUpperCase() || 'AX';
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-background pb-32">
       <div className="max-w-md mx-auto px-6 pt-12">
         <header className="flex flex-col items-center mb-8">
-          <div className="relative mb-4">
-            <Avatar className="w-24 h-24 border-4 border-white dark:border-gray-800 shadow-xl">
-              <AvatarImage src={user?.user_metadata?.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop"} />
-              <AvatarFallback>{user?.email?.substring(0, 2).toUpperCase() || 'AX'}</AvatarFallback>
+          <div className="relative mb-4 group">
+            <Avatar className="w-24 h-24 border-4 border-white dark:border-gray-800 shadow-xl overflow-hidden">
+              <AvatarImage src={profile?.avatar_url} className="object-cover" />
+              <AvatarFallback className="bg-blue-100 text-blue-600 text-xl font-bold">
+                {initials}
+              </AvatarFallback>
+              {isUploading && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <Loader2 className="text-white animate-spin" size={24} />
+                </div>
+              )}
             </Avatar>
-            <Button size="icon" className="absolute bottom-0 right-0 rounded-full bg-blue-600 hover:bg-blue-700 border-2 border-white dark:border-gray-800 w-8 h-8">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept="image/*" 
+              onChange={handleFileChange}
+            />
+            <Button 
+              size="icon" 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="absolute bottom-0 right-0 rounded-full bg-blue-600 hover:bg-blue-700 border-2 border-white dark:border-gray-800 w-8 h-8 shadow-lg"
+            >
               <Camera size={14} />
             </Button>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {user?.user_metadata?.full_name || 'Alex Johnson'}
-          </h2>
-          <p className="text-gray-500">{user?.email || 'alex.j@example.com'}</p>
+          
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {profile?.full_name || 'Alex Johnson'}
+            </h2>
+            <p className="text-gray-500">{user?.email || 'alex.j@example.com'}</p>
+            
+            {profile?.avatar_url && (
+              <button 
+                onClick={handleRemoveAvatar}
+                className="text-xs text-red-500 mt-2 font-medium hover:underline flex items-center justify-center gap-1 mx-auto"
+              >
+                <Trash2 size={12} /> Remove Photo
+              </button>
+            )}
+          </div>
         </header>
 
         <div className="space-y-6">

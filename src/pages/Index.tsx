@@ -5,20 +5,35 @@ import { useNavigate } from 'react-router-dom';
 import GlassCard from '@/components/GlassCard';
 import Navigation from '@/components/Navigation';
 import InstallPrompt from '@/components/InstallPrompt';
-import { Pill, CheckCircle2, Clock, Plus, Sparkles, Bell, TrendingUp } from 'lucide-react';
+import { Pill, CheckCircle2, Clock, Plus, Sparkles, Bell, TrendingUp, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/utils';
 import { subscribeToMeds, getTodayMeds, logDose } from '@/lib/medicationService';
 import { requestNotificationPermission } from '@/lib/notificationService';
+import { supabase } from "@/integrations/supabase/client";
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 const Index = () => {
   const navigate = useNavigate();
   const [todayMeds, setTodayMeds] = useState(getTodayMeds());
+  const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => {
-    // Request notification permissions on first load
     requestNotificationPermission();
+
+    const fetchData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        setProfile(data);
+      }
+    };
+    fetchData();
 
     const unsubscribe = subscribeToMeds((updatedMeds) => {
       setTodayMeds(updatedMeds);
@@ -28,16 +43,29 @@ const Index = () => {
 
   const takenCount = todayMeds.filter(m => m.status === 'taken').length;
   const totalCount = todayMeds.length;
-  const adherence = Math.round((takenCount / totalCount) * 100);
+  const adherence = Math.round((takenCount / totalCount) * 100) || 0;
+
+  const firstName = profile?.full_name?.split(' ')[0] || 'Alex';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 pb-32">
       <div className="max-w-md mx-auto px-6 pt-12">
         {/* Header */}
         <header className="flex justify-between items-start mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Hello, Alex</h1>
-            <p className="text-gray-500 dark:text-gray-400">You've taken {takenCount} of {totalCount} doses today</p>
+          <div className="flex items-center gap-4">
+            <Avatar 
+              className="w-12 h-12 border-2 border-white dark:border-gray-800 shadow-md cursor-pointer"
+              onClick={() => navigate('/profile')}
+            >
+              <AvatarImage src={profile?.avatar_url} className="object-cover" />
+              <AvatarFallback className="bg-blue-100 text-blue-600 font-bold">
+                {firstName[0]}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Hello, {firstName}</h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400">You've taken {takenCount} of {totalCount} doses today</p>
+            </div>
           </div>
           <Button 
             variant="ghost" 
