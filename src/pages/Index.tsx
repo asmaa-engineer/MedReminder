@@ -9,59 +9,122 @@ import { Pill, CheckCircle2, Clock, Plus, Sparkles, Bell, TrendingUp } from 'luc
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { subscribeToMeds, getTodayMeds, logDose } from '@/lib/medicationService';
-import { requestNotificationPermission } from '@/lib/notificationService';
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { showSuccess, showError } from '@/utils/toast';
 
 const Index = () => {
   const navigate = useNavigate();
-  const [todayMeds, setTodayMeds] = useState(getTodayMeds());
   const [profile, setProfile] = useState<any>(null);
+  const [todayMeds, setTodayMeds] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    requestNotificationPermission();
-
     const fetchData = async () => {
+      console.log("[Home] Fetching data...");
       const { data: { user } } = await supabase.auth.getUser();
+      
       if (user) {
-        const { data } = await supabase
+        // Fetch Profile
+        const { data: profileData } = await supabase
           .from('user_profiles')
           .select('*')
           .eq('user_id', user.id)
           .single();
-        setProfile(data);
+        setProfile(profileData);
+
+        // Fetch Today's Doses
+        const today = new Date().toISOString().split('T')[0];
+        const { data: dosesData, error: dosesError } = await supabase
+          .from('doses')
+          .select(`
+            *,
+            medications (
+              name,
+              dosage
+            )
+          `)
+          .eq('user_id', user.id)
+          .gte('scheduled_time', `${today}T00:00:00`)
+          .lte('scheduled_time', `${today}T23:59:59`)
+          .order('scheduled_time', { ascending: true });
+
+        if (dosesError) {
+          console.error("[Home] Doses fetch error:", dosesError);
+        } else {
+          console.log("[Home] Doses loaded:", dosesData);
+          setTodayMeds(dosesData || []);
+        }
       }
+      setIsLoading(false);
     };
     fetchData();
 
     // Real-time subscription for profile changes
-    const channel = supabase
+    const profileChannel = supabase
       .channel('home_profile_changes')
       .on('postgres_changes', { 
         event: 'UPDATE', 
         schema: 'public', 
         table: 'user_profiles' 
       }, (payload) => {
+        console.log("[Home] Profile real-time update:", payload.new);
         setProfile(payload.new);
       })
       .subscribe();
 
-    const unsubscribeMeds = subscribeToMeds((updatedMeds) => {
-      setTodayMeds(updatedMeds);
-    });
+    // Real-time subscription for dose changes
+    const dosesChannel = supabase
+      .channel('home_doses_changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'doses' 
+      }, () => {
+        console.log("[Home] Doses real-time update triggered");
+        fetchData();
+      })
+      .subscribe();
 
     return () => {
-      unsubscribeMeds();
-      supabase.removeChannel(channel);
+      supabase.removeChannel(profileChannel);
+      supabase.removeChannel(dosesChannel);
     };
   }, []);
 
+  const handleLogDose = async (doseId: string, medName: string) => {
+    console.log(`[Home] Logging dose ${doseId}...`);
+    try {
+      const { error } = await supabase
+        .from('doses')
+        .update({ 
+          status: 'taken', 
+          taken_time: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', doseId);
+
+      if (error) throw error;
+      showSuccess(`Logged ${medName} as taken!`);
+    } catch (error: any) {
+      console.error("[Home] Log dose error:", error);
+      showError("Failed to log dose");
+    }
+  };
+
   const takenCount = todayMeds.filter(m => m.status === 'taken').length;
   const totalCount = todayMeds.length;
-  const adherence = Math.round((takenCount / totalCount) * 100) || 0;
+  const adherence = totalCount > 0 ? Math.round((takenCount / totalCount) * 100) : 0;
 
-  const firstName = profile?.full_name?.split(' ')[0] || 'Alex';
+  const firstName = profile?.full_name?.split(' ')[0] || 'User';
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <Loader2 className="animate-spin text-blue-600" size={48} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 pb-32">
@@ -80,13 +143,17 @@ const Index = () => {
             </Avatar>
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Hello, {firstName}</h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">You've taken {takenCount} of {totalCount} doses today</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {totalCount > 0 
+                  ? `You've taken ${takenCount} of ${totalCount} doses today`
+                  : "No doses scheduled for today"}
+              </p>
             </div>
           </div>
           <Button 
             variant="ghost" 
             size="icon" 
-            className="relative bg-white/50 dark:bg-gray-800/50 backdrop-blur-md rounded-2xl shadow-sm h-12 w-12 min-h-[48px] min-w-[48px]"
+            className="relative bg-white/50 dark:bg-gray-800/50 backdrop-blur-md rounded-2xl shadow-sm h-12 w-12"
             onClick={() => navigate('/notifications')}
           >
             <Bell size={24} className="text-gray-600 dark:text-gray-400" />
@@ -96,27 +163,27 @@ const Index = () => {
 
         {/* Adherence Progress */}
         <GlassCard 
-          className="mb-8 bg-blue-600 text-white border-none cursor-pointer active:scale-[0.98] transition-transform min-h-[120px]"
+          className="mb-8 bg-blue-600 text-white border-none cursor-pointer active:scale-[0.98] transition-transform"
           onClick={() => navigate('/insights')}
         >
           <div className="flex justify-between items-center mb-4">
             <div>
               <h3 className="text-lg font-semibold">Daily Adherence</h3>
-              <p className="text-blue-100 text-sm">Keep it up!</p>
+              <p className="text-blue-100 text-sm">{adherence === 100 ? "Perfect score!" : "Keep it up!"}</p>
             </div>
             <div className="text-3xl font-black">{adherence}%</div>
           </div>
           <Progress value={adherence} className="h-2 bg-blue-400/30" />
           <div className="mt-4 flex items-center gap-2 text-xs text-blue-100">
             <TrendingUp size={14} />
-            <span>Your adherence is up 12% from last week</span>
+            <span>Your adherence is tracked in real-time</span>
           </div>
         </GlassCard>
 
         {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-4 mb-8">
           <GlassCard 
-            className="p-4 flex items-center gap-3 bg-white dark:bg-gray-900 border-none shadow-sm cursor-pointer min-h-[80px]"
+            className="p-4 flex items-center gap-3 bg-white dark:bg-gray-900 border-none shadow-sm cursor-pointer"
             onClick={() => navigate('/history')}
           >
             <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-xl">
@@ -128,7 +195,7 @@ const Index = () => {
             </div>
           </GlassCard>
           <GlassCard 
-            className="p-4 flex items-center gap-3 bg-white dark:bg-gray-900 border-none shadow-sm cursor-pointer min-h-[80px]"
+            className="p-4 flex items-center gap-3 bg-white dark:bg-gray-900 border-none shadow-sm cursor-pointer"
             onClick={() => navigate('/remaining')}
           >
             <div className="bg-orange-100 dark:bg-orange-900/30 p-2 rounded-xl">
@@ -141,27 +208,13 @@ const Index = () => {
           </GlassCard>
         </div>
 
-        {/* AI Insight Card */}
-        <GlassCard 
-          className="mb-8 bg-indigo-50 dark:bg-indigo-900/20 border-indigo-100 dark:border-indigo-900/30 p-4 flex items-center gap-4 cursor-pointer min-h-[80px]"
-          onClick={() => navigate('/chat')}
-        >
-          <div className="bg-indigo-600 p-3 rounded-2xl text-white">
-            <Sparkles size={20} />
-          </div>
-          <div className="flex-1">
-            <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">AI Insight</p>
-            <p className="text-sm text-indigo-900 dark:text-indigo-100 font-medium">"You're doing great! Don't forget your Metformin at 12:30 PM."</p>
-          </div>
-        </GlassCard>
-
         {/* Today's Schedule */}
         <section>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Today's Schedule</h2>
             <Button 
               variant="ghost" 
-              className="text-blue-600 dark:text-blue-400 font-bold hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl h-12 min-h-[48px]"
+              className="text-blue-600 dark:text-blue-400 font-bold hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl"
               onClick={() => navigate('/medications')}
             >
               View All
@@ -169,49 +222,65 @@ const Index = () => {
           </div>
           
           <div className="space-y-4">
-            {todayMeds.map((med) => (
-              <GlassCard 
-                key={med.id} 
-                className="flex items-center justify-between p-4 bg-white dark:bg-gray-900 border-none shadow-sm hover:scale-[1.02] transition-transform cursor-pointer min-h-[80px]"
-                onClick={() => navigate(`/medications/${med.id}`)}
-              >
-                <div className="flex items-center gap-4">
-                  <div className={cn(
-                    "p-3 rounded-2xl",
-                    med.status === 'taken' ? "bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400" : "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                  )}>
-                    <Pill size={24} />
+            {todayMeds.length > 0 ? (
+              todayMeds.map((dose) => (
+                <GlassCard 
+                  key={dose.id} 
+                  className="flex items-center justify-between p-4 bg-white dark:bg-gray-900 border-none shadow-sm hover:scale-[1.02] transition-transform cursor-pointer"
+                  onClick={() => navigate(`/medications/${dose.medication_id}`)}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      "p-3 rounded-2xl",
+                      dose.status === 'taken' ? "bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400" : "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                    )}>
+                      <Pill size={24} />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 dark:text-white">{dose.medications?.name}</h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {dose.medications?.dosage} • {new Date(dose.scheduled_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-gray-900 dark:text-white">{med.name}</h4>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{med.dose} • {med.time}</p>
-                  </div>
-                </div>
-                {med.status === 'taken' ? (
-                  <div className="bg-green-50 dark:bg-green-900/30 p-2 rounded-full min-h-[48px] min-w-[48px] flex items-center justify-center">
-                    <CheckCircle2 className="text-green-500 dark:text-green-400" size={24} />
-                  </div>
-                ) : (
-                  <Button 
-                    size="sm" 
-                    className="rounded-xl bg-blue-600 hover:bg-blue-700 px-6 font-bold shadow-md shadow-blue-100 dark:shadow-none h-12 min-h-[48px]"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      logDose(med.id);
-                    }}
-                  >
-                    Take
-                  </Button>
-                )}
-              </GlassCard>
-            ))}
+                  {dose.status === 'taken' ? (
+                    <div className="bg-green-50 dark:bg-green-900/30 p-2 rounded-full">
+                      <CheckCircle2 className="text-green-500 dark:text-green-400" size={24} />
+                    </div>
+                  ) : (
+                    <Button 
+                      size="sm" 
+                      className="rounded-xl bg-blue-600 hover:bg-blue-700 px-6 font-bold shadow-md shadow-blue-100 dark:shadow-none"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleLogDose(dose.id, dose.medications?.name);
+                      }}
+                    >
+                      Take
+                    </Button>
+                  )}
+                </GlassCard>
+              ))
+            ) : (
+              <div className="text-center py-12 bg-white/50 dark:bg-gray-900/50 rounded-3xl border border-dashed border-gray-200 dark:border-gray-800">
+                <Pill className="mx-auto text-gray-300 mb-4" size={48} />
+                <p className="text-gray-500 dark:text-gray-400">No doses scheduled for today.</p>
+                <Button 
+                  variant="link" 
+                  className="text-blue-600 mt-2"
+                  onClick={() => navigate('/medications/new')}
+                >
+                  Add a medication
+                </Button>
+              </div>
+            )}
           </div>
         </section>
 
         {/* FAB */}
         <Button 
           onClick={() => navigate('/camera')}
-          className="fixed bottom-24 right-6 w-16 h-16 rounded-[24px] shadow-2xl bg-blue-600 hover:bg-blue-700 flex items-center justify-center p-0 border-4 border-white dark:border-gray-900 z-50 min-h-[64px] min-w-[64px]"
+          className="fixed bottom-24 right-6 w-16 h-16 rounded-[24px] shadow-2xl bg-blue-600 hover:bg-blue-700 flex items-center justify-center p-0 border-4 border-white dark:border-gray-900 z-50"
         >
           <Plus size={32} className="text-white" />
         </Button>

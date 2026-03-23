@@ -10,8 +10,6 @@ import {
   LogOut, 
   ChevronRight, 
   Camera, 
-  BellRing, 
-  ShieldCheck, 
   Loader2, 
   Trash2,
   Upload,
@@ -31,7 +29,6 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { notifyDoseReminder, requestNotificationPermission } from '@/lib/notificationService';
 import { showSuccess, showError } from '@/utils/toast';
 import { supabase } from "@/integrations/supabase/client";
 import { uploadAvatar } from '@/lib/storageService';
@@ -52,17 +49,31 @@ const Profile = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      console.log("[Profile] Fetching user data...");
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        console.error("[Profile] Auth error:", authError);
+        showError("Failed to load user session");
+        return;
+      }
+
       setUser(user);
+      console.log("[Profile] User found:", user?.email);
       
       if (user) {
-        const { data: profileData } = await supabase
+        const { data: profileData, error: profileError } = await supabase
           .from('user_profiles')
           .select('*')
           .eq('user_id', user.id)
           .single();
         
+        if (profileError) {
+          console.warn("[Profile] Profile fetch error (might not exist yet):", profileError);
+        }
+
         if (profileData) {
+          console.log("[Profile] Profile data loaded:", profileData);
           setProfile(profileData);
           setFormData({
             full_name: profileData.full_name || '',
@@ -74,6 +85,7 @@ const Profile = () => {
     };
     fetchData();
 
+    // Real-time subscription for profile changes
     const channel = supabase
       .channel('profile_page_changes')
       .on('postgres_changes', { 
@@ -81,6 +93,7 @@ const Profile = () => {
         schema: 'public', 
         table: 'user_profiles' 
       }, (payload) => {
+        console.log("[Profile] Real-time update received:", payload.new);
         setProfile(payload.new);
       })
       .subscribe();
@@ -103,6 +116,7 @@ const Profile = () => {
   const handleSaveProfile = async () => {
     if (!user) return;
     setIsSaving(true);
+    console.log("[Profile] Saving changes...", formData);
     try {
       const { error } = await supabase
         .from('user_profiles')
@@ -117,6 +131,7 @@ const Profile = () => {
       if (error) throw error;
       showSuccess("Profile updated successfully!");
     } catch (error: any) {
+      console.error("[Profile] Save error:", error);
       showError(error.message);
     } finally {
       setIsSaving(false);
@@ -126,11 +141,6 @@ const Profile = () => {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-
-    if (file.size > 2 * 1024 * 1024) {
-      showError("File size must be less than 2MB");
-      return;
-    }
 
     setIsUploading(true);
     try {
@@ -163,7 +173,7 @@ const Profile = () => {
 
   const initials = formData.full_name 
     ? formData.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()
-    : user?.email?.substring(0, 2).toUpperCase() || 'AX';
+    : user?.email?.substring(0, 2).toUpperCase() || '??';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-background pb-32">
@@ -321,8 +331,6 @@ const Profile = () => {
             <LogOut size={20} className="mr-2" />
             {t('logout')}
           </Button>
-          
-          <p className="text-center text-[10px] text-gray-400 pb-8">MediMind v1.0.0 • Made with Care</p>
         </div>
       </div>
       <Navigation />
