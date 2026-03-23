@@ -7,8 +7,7 @@ import { useTheme } from 'next-themes';
 import Navigation from '@/components/Navigation';
 import GlassCard from '@/components/GlassCard';
 import { 
-  ChevronLeft, Bell, Moon, Globe, Shield, 
-  Download, Trash2, Info, Volume2, Clock, Database, AlertTriangle
+  ChevronLeft, Moon, Globe, Trash2, Database, AlertTriangle, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -34,6 +33,7 @@ const Settings = () => {
   const { t, i18n } = useTranslation();
   const { theme, setTheme } = useTheme();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
 
   const toggleLanguage = (lang: string) => {
     i18n.changeLanguage(lang);
@@ -43,12 +43,10 @@ const Settings = () => {
   const handleDeleteAccount = async () => {
     setIsDeleting(true);
     try {
-      console.log("Starting account deletion process...");
-      
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("No active session");
+      if (!session) throw new Error("No active session found");
 
-      // Call Edge Function to delete auth user
+      // Call Edge Function to delete auth user and all associated data
       const response = await fetch('https://oycdsiipsryeqhihrzgf.supabase.co/functions/v1/delete-user', {
         method: 'POST',
         headers: {
@@ -63,9 +61,9 @@ const Settings = () => {
       }
 
       await supabase.auth.signOut();
-      showSuccess("Account deleted successfully");
+      showSuccess("Account and all data deleted successfully");
       navigate('/login');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Deletion error:", error);
       showError(error.message);
     } finally {
@@ -74,25 +72,25 @@ const Settings = () => {
   };
 
   const testDatabase = async () => {
+    setIsTesting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return showError("Not logged in");
+      if (!user) throw new Error("Not logged in");
 
-      const tables = ['medications', 'doses', 'chat_history', 'notifications'];
-      let stats = "";
+      // Simple query to test connection
+      const { error } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
       
-      for (const table of tables) {
-        const { count, error } = await supabase
-          .from(table)
-          .select('*', { count: 'exact', head: true });
-        
-        if (error) console.error(`Error fetching ${table}:`, error);
-        stats += `${table}: ${count || 0}\n`;
-      }
-
-      alert(`Database Stats for ${user.email}:\n\n${stats}`);
-    } catch (error) {
-      showError("Failed to test database");
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "no rows", which is fine for a connection test
+      
+      showSuccess("Connected to Supabase successfully!");
+    } catch (error: any) {
+      showError(`Connection failed: ${error.message}`);
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -145,10 +143,13 @@ const Settings = () => {
           <GlassCard className="p-0 bg-white dark:bg-gray-900 border-none shadow-sm overflow-hidden">
             <button 
               onClick={testDatabase}
+              disabled={isTesting}
               className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="bg-blue-50 dark:bg-blue-800/30 p-2 rounded-xl text-blue-600"><Database size={20} /></div>
+                <div className="bg-blue-50 dark:bg-blue-800/30 p-2 rounded-xl text-blue-600">
+                  {isTesting ? <Loader2 className="animate-spin" size={20} /> : <Database size={20} />}
+                </div>
                 <span className="font-medium">Test Database Connection</span>
               </div>
             </button>

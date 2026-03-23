@@ -15,9 +15,15 @@ import {
   Loader2, 
   Trash2,
   Upload,
-  MoreVertical
+  Save,
+  User as UserIcon,
+  Phone,
+  HeartPulse,
+  Mail
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   DropdownMenu, 
@@ -36,6 +42,12 @@ const Profile = () => {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [formData, setFormData] = useState({
+    full_name: '',
+    phone: '',
+    emergency_contact: ''
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -49,12 +61,19 @@ const Profile = () => {
           .select('*')
           .eq('user_id', user.id)
           .single();
-        setProfile(profileData);
+        
+        if (profileData) {
+          setProfile(profileData);
+          setFormData({
+            full_name: profileData.full_name || '',
+            phone: profileData.phone || '',
+            emergency_contact: profileData.emergency_contact || ''
+          });
+        }
       }
     };
     fetchData();
 
-    // Real-time subscription for this specific profile
     const channel = supabase
       .channel('profile_page_changes')
       .on('postgres_changes', { 
@@ -81,6 +100,29 @@ const Profile = () => {
     }
   };
 
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          full_name: formData.full_name,
+          phone: formData.phone,
+          emergency_contact: formData.emergency_contact,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      showSuccess("Profile updated successfully!");
+    } catch (error: any) {
+      showError(error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
@@ -92,7 +134,7 @@ const Profile = () => {
 
     setIsUploading(true);
     try {
-      const publicUrl = await uploadAvatar(user.id, file);
+      await uploadAvatar(user.id, file);
       showSuccess("Profile picture updated!");
     } catch (error: any) {
       showError(error.message || "Failed to upload image");
@@ -119,18 +161,8 @@ const Profile = () => {
     }
   };
 
-  const handleTestNotification = async () => {
-    const granted = await requestNotificationPermission();
-    if (granted) {
-      notifyDoseReminder("Test Medication", "Now");
-      showSuccess("Test notification sent!");
-    } else {
-      showSuccess("Notification permission denied.");
-    }
-  };
-
-  const initials = profile?.full_name 
-    ? profile.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()
+  const initials = formData.full_name 
+    ? formData.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()
     : user?.email?.substring(0, 2).toUpperCase() || 'AX';
 
   return (
@@ -193,54 +225,75 @@ const Profile = () => {
           
           <div className="text-center space-y-1">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {profile?.full_name || 'Alex Johnson'}
+              {formData.full_name || 'Set your name'}
             </h2>
-            <p className="text-gray-500 text-sm">{user?.email || 'alex.j@example.com'}</p>
-            
-            <div className="mt-4">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="rounded-xl h-9 px-4 border-gray-200 dark:border-gray-800"
-              >
-                <Upload size={14} className="mr-2" /> Change Photo
-              </Button>
-            </div>
+            <p className="text-gray-500 text-sm">{user?.email}</p>
           </div>
         </header>
 
         <div className="space-y-6">
           <section>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 ml-2">Account Security</h3>
-            <GlassCard className="p-0 bg-white dark:bg-gray-900 border-none shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-3">
-                  <div className="bg-green-50 dark:bg-green-900/30 p-2 rounded-xl text-green-600"><ShieldCheck size={20} /></div>
-                  <div>
-                    <p className="font-medium">Account Status</p>
-                    <p className="text-[10px] text-gray-400">Verified & Secure</p>
-                  </div>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 ml-2">Personal Information</h3>
+            <GlassCard className="bg-white dark:bg-gray-900 border-none shadow-sm p-6 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">Full Name</Label>
+                <div className="relative">
+                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <Input 
+                    value={formData.full_name}
+                    onChange={(e) => setFormData({...formData, full_name: e.target.value})}
+                    className="pl-10 h-12 rounded-xl"
+                    placeholder="Enter your full name"
+                  />
                 </div>
-                <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg">Active</span>
               </div>
-            </GlassCard>
-          </section>
 
-          <section>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 ml-2">System Test</h3>
-            <GlassCard className="p-0 bg-white dark:bg-gray-900 border-none shadow-sm overflow-hidden">
-              <button 
-                onClick={handleTestNotification}
-                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors min-h-[48px]"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="bg-purple-50 dark:bg-purple-900/30 p-2 rounded-xl text-purple-600"><BellRing size={20} /></div>
-                  <span className="font-medium">Test Push Notification</span>
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">Email (Read-only)</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
+                  <Input 
+                    value={user?.email || ''}
+                    readOnly
+                    className="pl-10 h-12 rounded-xl bg-gray-50 text-gray-400 border-gray-100"
+                  />
                 </div>
-                <ChevronRight size={18} className="text-gray-300" />
-              </button>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">Phone Number</Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <Input 
+                    value={formData.phone}
+                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                    className="pl-10 h-12 rounded-xl"
+                    placeholder="+1 (555) 000-0000"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-500">Emergency Contact</Label>
+                <div className="relative">
+                  <HeartPulse className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <Input 
+                    value={formData.emergency_contact}
+                    onChange={(e) => setFormData({...formData, emergency_contact: e.target.value})}
+                    className="pl-10 h-12 rounded-xl"
+                    placeholder="Name & Phone"
+                  />
+                </div>
+              </div>
+
+              <Button 
+                onClick={handleSaveProfile}
+                disabled={isSaving}
+                className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold mt-2"
+              >
+                {isSaving ? <Loader2 className="animate-spin mr-2" size={18} /> : <Save className="mr-2" size={18} />}
+                Save Changes
+              </Button>
             </GlassCard>
           </section>
 
