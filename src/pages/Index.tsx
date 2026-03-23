@@ -8,7 +8,7 @@ import InstallPrompt from '@/components/InstallPrompt';
 import { Pill, CheckCircle2, Clock, Plus, Sparkles, Bell, TrendingUp, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { cn } from '@/utils/utils';
+import { cn } from '@/lib/utils';
 import { subscribeToMeds, getTodayMeds, logDose } from '@/lib/medicationService';
 import { requestNotificationPermission } from '@/lib/notificationService';
 import { supabase } from "@/integrations/supabase/client";
